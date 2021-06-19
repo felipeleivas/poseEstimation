@@ -1,4 +1,6 @@
+from scipy import linalg
 import numpy as np
+
 SHOULD_PRINT = False
 def getMatrix(K,pixels, coordinates):
 	kInv = np.linalg.inv(K)
@@ -28,6 +30,14 @@ def getMatrix(K,pixels, coordinates):
 	r1 = np.array([system[0][0], system[3][0], system[6][0]])
 	r2 = np.array([system[1][0], system[4][0], system[7][0]])
 	r3 = np.cross(r1,r2)
+
+	# r1 = np.array([[system[0][0], system[1][0]], [system[3][0],system[4][0]], [system[6][0],system[7][0]]])
+
+	# print("R1->", r1)
+	# print("R2->", r2)
+	# print(linalg.orthogonal_procrustes(r1,r2))
+	# print("R1->", r1)
+	# print("R2->", r2)
 	t = np.array([system[2],system[5],system[8]])
 	R = np.array([
 			[r1[0],r2[0],r3[0]],

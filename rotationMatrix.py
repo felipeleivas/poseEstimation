@@ -1,5 +1,6 @@
 import numpy as np
-import math 
+import math
+ 
 SHOULD_PRINT = False
 
 def getRotationMatrix(alpha, beta, gama):
