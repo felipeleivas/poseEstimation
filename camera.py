@@ -6,18 +6,14 @@ from rotationMatrix import getRotationMatrix
 SHOULD_PRINT = False
 ALPHA = pi/2
 BETA = 0
-GAMA = 0 
+GAMA = 0
 
-K = np.array([[1,0,0], [0,1,0], [0,0,1/64]])
+K = np.array([
+    [1711.50988, 0.00000000, 590.733223],
+    [0.00000000, 1702.53509, 995.529274],
+    [0.00000000, 0.00000000, 1.00]
+])
 R = getRotationMatrix(ALPHA, BETA, GAMA)
-T = np.array([[1],[1],[1]])
+T = np.array([[1.7],[-8],[1.5]])
 
 
-def getPixelPointFromRealWorldCordinates(K,R,T, point):
-	point.append(1)
-	rt= np.concatenate((R,T),1)
-	A = np.dot(K,rt)
-
-	pixelVector = np.dot(A, np.array(point) )
-	pixelVector = [pixelVector[0]/pixelVector[2], pixelVector[1]/pixelVector[2]]
-	return pixelVector

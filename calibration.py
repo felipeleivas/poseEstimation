@@ -7,8 +7,7 @@ def getMatrix(K,pixels, coordinates):
 	A = []
 	y = []
 	for i in range(0, len(pixels)):
-		pixel = pixels[i]
-		pixel.append(1)
+		pixel = [pixels[i][0], pixels[i][1], 1]
 		coordinate = coordinates[i]
 		A.append([coordinate[0],coordinate[1], 1, 0,0,0,0,0,0])
 		A.append([0,0,0, coordinate[0],coordinate[1], 1,0,0,0])
@@ -29,16 +28,15 @@ def getMatrix(K,pixels, coordinates):
 
 	r1 = np.array([system[0][0], system[3][0], system[6][0]])
 	r2 = np.array([system[1][0], system[4][0], system[7][0]])
+	moduleR1 = np.linalg.norm(r1)
+	moduleR2 = np.linalg.norm(r2)
+	avgModule = (moduleR2 + moduleR1)/2
+	r1 = r1/moduleR1
+	r2 = r2/moduleR2
+
 	r3 = np.cross(r1,r2)
 
-	# r1 = np.array([[system[0][0], system[1][0]], [system[3][0],system[4][0]], [system[6][0],system[7][0]]])
-
-	# print("R1->", r1)
-	# print("R2->", r2)
-	# print(linalg.orthogonal_procrustes(r1,r2))
-	# print("R1->", r1)
-	# print("R2->", r2)
-	t = np.array([system[2],system[5],system[8]])
+	t = np.array([system[2],system[5],system[8]])/avgModule
 	R = np.array([
 			[r1[0],r2[0],r3[0]],
 			[r1[1],r2[1],r3[1]],

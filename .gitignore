@@ -1,1 +1,7 @@
 __pycache__/
+.idea/
+*/.idea/
+videos/
+output/
+plate_detectation/
+points/
