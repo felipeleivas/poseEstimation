@@ -7,6 +7,8 @@ import numpy as np
 from scipy import stats
 from sklearn.linear_model import RANSACRegressor
 
+from ransac_3d_fit import Ransac3DFit
+
 
 def round_number(number, decimal):
     decimal_value = pow(10, decimal)
@@ -51,6 +53,8 @@ def get_ransac_speed_complete(timestamps, positions, min_dist=None, max_dist=Non
     filtered_positions_mask = get_filtered_positions_mask(positions, min_dist, max_dist)
     timestamps = np.array(timestamps)[filtered_positions_mask]
     positions = np.array(positions)[filtered_positions_mask]
+    if len(positions) <= 1:
+        return None, None, None
     positions_per_axis = []
     for position in positions:
         for index in range(0, len(position)):
@@ -125,35 +129,83 @@ def get_interpolated_speeds(timestamps, positions, interpolation_interval=None, 
 #################
 def get_average_speed(timestamps, positions, min_dist=None, max_dist=None):
     speeds = get_speeds(timestamps, positions, min_dist, max_dist)
-    return statistics.mean(speeds)
+    print(speeds)
+    if len(speeds) > 0:
+        return statistics.mean(speeds)
+    return None;
 
 
 def get_median_speed(timestamps, positions, min_dist=None, max_dist=None):
     speeds = get_speeds(timestamps, positions, min_dist, max_dist)
-    return statistics.median(speeds)
+    if len(speeds) > 0:
+        return statistics.median(speeds)
+    return None
+
+def get_ransac_speed_3d_fit(timestamps, positions, min_dist=None, max_dist=None, precision=2):
+    speed, _ = get_ransac_speed_3d_complete(timestamps, positions, min_dist, max_dist, precision)
+    return speed
 
 
-def get_trim_mean_speed(timestamps, positions, proportion_to_cut=0.1, min_dist=None, max_dist=None):
+def get_ransac_speed_3d_complete(timestamps, positions, min_dist=None, max_dist=None, precision=2):
+
+    filtered_positions_mask = get_filtered_positions_mask(positions, min_dist, max_dist)
+    timestamps = np.array(timestamps)[filtered_positions_mask]
+    positions = np.array(positions)[filtered_positions_mask]
+    if len(positions) <= 1:
+        return None, None, None
+
+    ransac = RANSACRegressor(base_estimator=Ransac3DFit(), min_samples=(0.75), max_trials=1000,  residual_threshold=1, stop_probability=.99)
+    timestamps_f = []
+    for timestamp in timestamps:
+        timestamps_f.append([timestamp])
+    ransac.fit(timestamps_f, positions)
+    min_val = min(timestamps)
+    max_val = max(timestamps)
+    distance = calculate_distance(ransac.predict([[min_val]])[0], ransac.predict([[max_val]])[0])
+    speed = round_number(calculate_speed(distance, max_val - min_val), precision)
+    return speed, ransac
+
+def get_first_last_speed(timestamps, positions, min_dist=None, max_dist=None):
+    if len(timestamps) > 2:
+        distance = calculate_distance(positions[0], positions[-1])
+        elapsed_time = timestamps[-1] - timestamps[0]
+        return calculate_speed(distance, elapsed_time)
+    return None
+
+
+def get_trim_mean_speed(timestamps, positions, min_dist=None, max_dist=None):
+    proportion_to_cut = 0.10
     speeds = get_speeds(timestamps, positions, min_dist, max_dist)
-    return stats.trim_mean(speeds, proportion_to_cut)
+    if len(speeds) > 0:
+        return stats.trim_mean(speeds, proportion_to_cut)
+    return None
 
 
 def get_interpolated_average_speed(timestamps, positions, min_dist=None, max_dist=None):
     speeds = get_interpolated_speeds(timestamps, positions, None, min_dist, max_dist)
-    return statistics.mean(speeds)
+    print(speeds)
+    if len(speeds) > 0:
+        return statistics.mean(speeds)
+    return None
 
 
 def get_interpolated_median_speed(timestamps, positions, min_dist=None, max_dist=None):
     speeds = get_interpolated_speeds(timestamps, positions, None, min_dist, max_dist)
-    return statistics.median(speeds)
+    if len(speeds) > 0:
+        return statistics.median(speeds)
+    return None
 
 
-def get_interpolated_trim_mean_speed(timestamps, positions, proportion_to_cut=0.1, min_dist=None, max_dist=None):
+def get_interpolated_trim_mean_speed(timestamps, positions, min_dist=None, max_dist=None):
+    proportion_to_cut = 0.1
     speeds = get_interpolated_speeds(timestamps, positions, None, min_dist, max_dist)
-    return stats.trim_mean(speeds, proportion_to_cut)
+    if len(speeds) > 0:
+        return stats.trim_mean(speeds, proportion_to_cut)
+    return None
 
 
 def print_speed(timestamps, positions, output_file):
+    should_restrict_distance = False
     min_distance = 0
     max_distance = 25.0
     average_speed = get_average_speed(timestamps, positions)
@@ -163,61 +215,58 @@ def print_speed(timestamps, positions, output_file):
     interpolated_median_speed = get_interpolated_median_speed(timestamps, positions)
     interpolated_trim_mean_speed = get_interpolated_trim_mean_speed(timestamps, positions)
     ransac_speed = get_ransac_speed(timestamps, positions)
-    distance_interval_average_speed = get_average_speed(timestamps, positions, min_distance, max_distance)
-    distance_interval_median_speed = get_median_speed(timestamps, positions, min_distance, max_distance)
-    distance_interval_trim_mean_speed = get_trim_mean_speed(timestamps, positions, min_distance, max_distance)
-    distance_interval_interpolated_average_speed = get_interpolated_average_speed(timestamps, positions, min_distance,
-                                                                                  max_distance)
-    distance_interval_interpolated_median_speed = get_interpolated_median_speed(timestamps, positions, min_distance,
-                                                                                max_distance)
-    distance_interval_interpolated_trim_mean_speed = get_interpolated_trim_mean_speed(timestamps, positions,
-                                                                                      min_distance, max_distance)
-    distance_interval_ransac_speed = get_ransac_speed(timestamps, positions, min_distance, max_distance)
+    first_last_speed = get_first_last_speed(timestamps, positions)
+    ransac_speed3d = get_ransac_speed_3d_fit(timestamps, positions)
+    if should_restrict_distance:
+        distance_interval_average_speed = get_average_speed(timestamps, positions, min_distance, max_distance)
+        distance_interval_median_speed = get_median_speed(timestamps, positions, min_distance, max_distance)
+        distance_interval_trim_mean_speed = get_trim_mean_speed(timestamps, positions, min_distance, max_distance)
+        distance_interval_interpolated_average_speed = get_interpolated_average_speed(timestamps, positions, min_distance, max_distance)
+        distance_interval_interpolated_median_speed = get_interpolated_median_speed(timestamps, positions, min_distance, max_distance)
+        distance_interval_interpolated_trim_mean_speed = get_interpolated_trim_mean_speed(timestamps, positions, min_distance, max_distance)
+        distance_interval_ransac_speed = get_ransac_speed(timestamps, positions, min_distance, max_distance)
 
-    # print('average                                                                                      ' + str(
-    #     average_speed))
-    # print('median                                                                                       ' + str(
-    #     median_speed))
-    # print('trim_mean                                                                                    ' + str(
-    #     trim_mean_speed))
-    # print('interpolated average                                                                         ' + str(
-    #     interpolated_average_speed))
-    # print('interpolated median                                                                          ' + str(
-    #     interpolated_median_speed))
-    # print('interpolated trim_mean                                                                       ' + str(
-    #     interpolated_trim_mean_speed))
+    print('average                                                                                      ' + str(average_speed))
+    print('median                                                                                       ' + str(median_speed))
+    print('trim_mean                                                                                    ' + str(trim_mean_speed))
+    print('interpolated average                                                                         ' + str(interpolated_average_speed))
+    print('interpolated median                                                                          ' + str(interpolated_median_speed))
+    print('interpolated trim_mean                                                                       ' + str(interpolated_trim_mean_speed))
     print('ransac ' + str(ransac_speed))
-    # print('average                  min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(
-    #     distance_interval_average_speed))
-    # print('median                   min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(
-    #     distance_interval_median_speed))
-    # print('trim_mean                min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(
-    #     distance_interval_trim_mean_speed))
-    # print('interpolated average     min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(
-    #     distance_interval_interpolated_average_speed))
-    # print('interpolated median      min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(
-    #     distance_interval_interpolated_median_speed))
-    # print('interpolated trim_mean   min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(
-    #     distance_interval_interpolated_trim_mean_speed))
+    print('first_last_speed ' + str(first_last_speed))
+    print('ransac_speed3d ' + str(ransac_speed3d))
+    if should_restrict_distance:
+        print('average                  min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(distance_interval_average_speed))
+        print('median                   min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(distance_interval_median_speed))
+        print('trim_mean                min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(distance_interval_trim_mean_speed))
+        print('interpolated average     min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(distance_interval_interpolated_average_speed))
+        print('interpolated median      min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(distance_interval_interpolated_median_speed))
+        print('interpolated trim_mean   min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(distance_interval_interpolated_trim_mean_speed))
 
-    print(
-        'ransac min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(
-            distance_interval_ransac_speed))
-    output_file.write(';' + str(average_speed) + ';' + str(median_speed) + ';' + str(trim_mean_speed) + ';' + str(
-        interpolated_average_speed) + ';' + str(interpolated_median_speed) + ';' + str(
-        interpolated_trim_mean_speed) + ';' + str(ransac_speed) + ';' + str(
-        distance_interval_average_speed) + ';' + str(distance_interval_median_speed) + ';' + str(
-        distance_interval_trim_mean_speed) + ';' + str(distance_interval_interpolated_average_speed) + ';' + str(
-        distance_interval_interpolated_median_speed) + ';' + str(
-        distance_interval_interpolated_trim_mean_speed) + ';' + str(distance_interval_ransac_speed) + '\n')
+        print('ransac min_dis ' + str(min_distance) + ' max dist ' + str(max_distance) + ' ' + str(distance_interval_ransac_speed))
+    output_file.write(
+        ';' + str(average_speed) + ';' + str(median_speed) + ';' + str(trim_mean_speed) + ';' + str(interpolated_average_speed) + ';' + str(interpolated_median_speed) + ';' + str(interpolated_trim_mean_speed) + ';' + str(ransac_speed) + ';' + str(
+            first_last_speed) + ';' + str(ransac_speed3d))
+    if should_restrict_distance:
+        output_file.write(str(distance_interval_average_speed) + ';' + str(distance_interval_median_speed) + ';' + str(distance_interval_trim_mean_speed) + ';' + str(distance_interval_interpolated_average_speed) + ';' + str(
+            distance_interval_interpolated_median_speed) + ';' + str(distance_interval_interpolated_trim_mean_speed) + ';' + str(distance_interval_ransac_speed) + ';' + str(ransac_speed3d))
+    output_file.write('\n')
     print('')
 
 
 def get_speed_from_content(file_content, output_file):
     positions = []
     timestamps = []
+    lines = []
     for line in file_content.split('\n'):
         line = line.strip()
+        if len(line) > 0 and not line == 'begin - attempt:' and not line == 'end - attempt:':
+            values = line.split(',')
+            if len(values) != 4:
+                break
+            lines.append(line)
+    lines = sorted(lines, key=lambda x: float(x.split(',')[0]))
+    for line in lines:
         if len(line) > 0 and not line == 'begin - attempt:' and not line == 'end - attempt:':
             values = line.split(',')
             if len(values) != 4:
@@ -227,10 +276,10 @@ def get_speed_from_content(file_content, output_file):
             position = tuple(values[1::])
             positions.append(position)
             timestamps.append(timestamp)
-    # if print:
-    return print_speed(np.array(timestamps), np.array(positions), output_file)
-    # else:
-    #     return get_speed(timestamps, positions)
+    if len(positions) == 0:
+        output_file.write('\n')
+        return None
+    return print_speed(np.array(timestamps), np.array(positions), output_file)  # else:  #     return get_speed(timestamps, positions)
 
 
 if __name__ == '__main__':
@@ -241,11 +290,10 @@ if __name__ == '__main__':
         i += 1
     csv = open(csv_filename + '.csv', 'w')
 
-    for filepath in glob.glob('points/01_08/*[!manual].csv'):
+    # for filepath in glob.glob('points/29_08/*[!_manual].csv'):
+    for filepath in glob.glob('points/points/*.csv'):
         file = open(filepath)
-        expected_speed = filepath.split('/')[-1].split('_')[1].split('.')[0]
+        expected_speed = filepath.split('/')[-1].split('_')[-1].split('.')[0]
         csv.write(filepath + ';' + expected_speed)
         print('reading for file ' + filepath + '\nexpected speed: ' + expected_speed)
         get_speed_from_content(file.read(), csv)
-        # average, median, fmean, trim_mean, _ = get_speed_from_content(file.read(), False)
-        # csv.write(filepath + "," + str(average) + "," + str(median) + "," + str(trim_mean) + ",\n")
